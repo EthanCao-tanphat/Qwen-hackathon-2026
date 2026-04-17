@@ -23,3 +23,19 @@ def validate_language(language: str) -> str:
     """Normalize and validate the language code."""
     lang = language.strip().lower()
     return lang if lang in SUPPORTED_LANGUAGES else "auto"
+
+def translate_text(text: str, source: str = "auto", target: str = "en") -> str:
+    """Translate text using Google Translate (free, via deep-translator)."""
+    if not text or not text.strip():
+        return text
+    try:
+        from deep_translator import GoogleTranslator
+        # Normalize our codes to Google codes
+        source_code = "vi" if source in ("vn", "vi") else source
+        target_code = "vi" if target in ("vn", "vi") else target
+        if source_code == target_code:
+            return text
+        return GoogleTranslator(source=source_code, target=target_code).translate(text)
+    except Exception as e:
+        print(f"⚠️  Translation failed: {e}")
+        return text  # fallback — return original text

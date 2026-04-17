@@ -4,13 +4,16 @@ Qwen API client — wraps Alibaba Cloud DashScope for VL, Audio, and Max models.
 
 import os
 import base64
+from pathlib import Path
 import httpx
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
 DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY", "")
-BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY", "")
+print(f"DEBUG KEY LOADED: '{DASHSCOPE_API_KEY[:10]}...' (len={len(DASHSCOPE_API_KEY)})")
+BASE_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
 
 HEADERS = {
     "Authorization": f"Bearer {DASHSCOPE_API_KEY}",

@@ -7,9 +7,8 @@ const BASE = '/api'
 
 export async function analyzeLabs(files, language = 'auto') {
   const form = new FormData()
-  // Accept single file or array
   const fileList = Array.isArray(files) ? files : [files]
-  fileList.forEach((f) => form.append('files', f))
+  form.append('file', fileList[0])
   form.append('language', language)
 
   const res = await fetch(`${BASE}/labs/analyze`, { method: 'POST', body: form })
@@ -38,6 +37,16 @@ export async function analyzeBody(frontImage, sideImage, heightCm, weightKg, gen
 
   const res = await fetch(`${BASE}/bodyscan/analyze`, { method: 'POST', body: form })
   if (!res.ok) throw new Error(`BodyScan API error: ${res.status}`)
+  return res.json()
+}
+
+export async function evaluatePhoto(imageBlob, photoType = 'front') {
+  const form = new FormData()
+  form.append('image', imageBlob, 'frame.jpg')
+  form.append('photo_type', photoType)
+
+  const res = await fetch(`${BASE}/bodyscan/evaluate-photo`, { method: 'POST', body: form })
+  if (!res.ok) throw new Error('Photo evaluation failed')
   return res.json()
 }
 

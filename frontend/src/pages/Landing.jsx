@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 
 /*──────────────────────────────────────────────
   HEALIX LANDING PAGE v2
@@ -186,13 +187,14 @@ function SpiralCanvas({ scrollProgress }) {
 }
 
 // ─── Feature Card V2 ───
-function FeatureCard({ icon, title, subtitle, desc, gradient, accentColor, delay, visible }) {
+function FeatureCard({ icon, title, subtitle, desc, gradient, accentColor, delay, visible, onClick }) {
   const [hovered, setHovered] = useState(false);
   return (
     <div
       className="fc2"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={onClick}
       style={{
         "--accent": accentColor,
         opacity: visible ? 1 : 0,
@@ -247,7 +249,7 @@ function FeatureCard({ icon, title, subtitle, desc, gradient, accentColor, delay
   );
 }
 
-// ─── Counter ───
+// ─── Counter ─── (returns fragment so gradient on parent applies)
 function Counter({ target, visible, suffix = "" }) {
   const [val, setVal] = useState(0);
   useEffect(() => {
@@ -260,7 +262,7 @@ function Counter({ target, visible, suffix = "" }) {
     };
     requestAnimationFrame(tick);
   }, [visible, target]);
-  return <span>{val}{suffix}</span>;
+  return <>{val}{suffix}</>;
 }
 
 // ─── Scroll Dots ───
@@ -281,6 +283,7 @@ function ScrollDots({ progress }) {
 
 // ─── Main Landing ───
 export default function HealixLanding() {
+  const navigate = useNavigate();
   const scrollProgress = useRef(0);
   const [sp, setSp] = useState(0);
   const [sections, setSections] = useState({});
@@ -310,6 +313,15 @@ export default function HealixLanding() {
     return () => { window.removeEventListener("scroll", onScroll); observer.disconnect(); };
   }, []);
 
+  // Smooth scroll handler for nav links
+  const scrollToSection = (e, sectionId) => {
+    e.preventDefault();
+    const el = document.getElementById(sectionId);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   const heroOp = sp < 0.1 ? 1 : Math.max(0, 1 - (sp - 0.1) / 0.08);
   const gsOp = sp < 0.15 ? 0 : sp < 0.25 ? (sp - 0.15) / 0.1 : sp < 0.38 ? 1 : Math.max(0, 1 - (sp - 0.38) / 0.1);
   const canvasOp = sp < 0.48 ? 1 : Math.max(0, 1 - (sp - 0.48) / 0.12);
@@ -320,6 +332,7 @@ export default function HealixLanding() {
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
         :root{--blue:#38B6FF;--deep:#0077CC;--cyan:#00D4AA;--purple:#8B5CF6;--bg:#FAFBFF;--text:#0a0a1a;--soft:#6a6a8a;--dark:#06060f}
         *{margin:0;padding:0;box-sizing:border-box}
+        html{scroll-behavior:smooth}
         .hx{font-family:'Outfit',sans-serif;color:#fff;-webkit-font-smoothing:antialiased;background:var(--dark)}
 
         /* Canvas fade */
@@ -329,9 +342,9 @@ export default function HealixLanding() {
         .nav{position:fixed;top:0;left:0;right:0;z-index:200;padding:18px 28px;display:flex;align-items:center;justify-content:space-between;transition:all .5s}
         .nav.dk{background:rgba(6,6,15,.82);backdrop-filter:blur(20px) saturate(1.5);border-bottom:1px solid rgba(255,255,255,.06)}
         .nav.lt{background:rgba(250,251,255,.88);backdrop-filter:blur(20px);border-bottom:1px solid rgba(0,0,0,.06)}
-        .nlogo{font-weight:800;font-size:24px;letter-spacing:-.5px;background:linear-gradient(135deg,var(--blue),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;display:flex;align-items:center;gap:10px}
+        .nlogo{font-weight:800;font-size:24px;letter-spacing:-.5px;background:linear-gradient(135deg,var(--blue),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;display:flex;align-items:center;gap:10px;cursor:pointer}
         .nlinks{display:flex;gap:36px}
-        .nlinks a{font-size:14px;font-weight:500;text-decoration:none;transition:color .3s}
+        .nlinks a{font-size:14px;font-weight:500;text-decoration:none;transition:color .3s;cursor:pointer}
         .nav.dk .nlinks a,.nav:not(.dk):not(.lt) .nlinks a{color:rgba(255,255,255,.55)}
         .nav.dk .nlinks a:hover,.nav:not(.dk):not(.lt) .nlinks a:hover{color:#fff}
         .nav.lt .nlinks a{color:var(--soft)}.nav.lt .nlinks a:hover{color:var(--text)}
@@ -359,10 +372,8 @@ export default function HealixLanding() {
         @keyframes gs{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
         .gssub{font-size:clamp(15px,2vw,19px);color:rgba(255,255,255,.5);max-width:520px;margin:0 auto 36px;line-height:1.7}
         .gsbtn{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
-        .btn1{padding:16px 40px;border-radius:100px;border:none;background:linear-gradient(135deg,var(--blue),var(--deep));color:#fff;font-weight:700;font-size:16px;cursor:pointer;font-family:'Outfit',sans-serif;box-shadow:0 0 40px rgba(56,182,255,.25),0 0 80px rgba(56,182,255,.08);transition:all .4s;position:relative;overflow:hidden}
-        .btn1:hover{transform:translateY(-3px) scale(1.03)}
-        .btn2{padding:16px 36px;border-radius:100px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:rgba(255,255,255,.75);font-weight:600;font-size:16px;cursor:pointer;font-family:'Outfit',sans-serif;backdrop-filter:blur(10px);transition:all .3s}
-        .btn2:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);transform:translateY(-2px)}
+        .btn1{padding:16px 48px;border-radius:100px;border:none;background:linear-gradient(135deg,var(--blue),var(--deep));color:#fff;font-weight:700;font-size:16px;cursor:pointer;font-family:'Outfit',sans-serif;box-shadow:0 0 40px rgba(56,182,255,.25),0 0 80px rgba(56,182,255,.08);transition:all .4s;position:relative;overflow:hidden}
+        .btn1:hover{transform:translateY(-3px) scale(1.03);box-shadow:0 0 60px rgba(56,182,255,.4),0 0 100px rgba(56,182,255,.15)}
 
         .spacer{height:300vh;position:relative;z-index:0}
         .lcontent{position:relative;z-index:10;background:var(--bg)}
@@ -401,7 +412,7 @@ export default function HealixLanding() {
         .stsec{padding:80px 24px;background:var(--dark);position:relative;z-index:10}
         .stgrid{max-width:1000px;margin:0 auto;display:flex;justify-content:center;gap:80px;flex-wrap:wrap}
         .st{text-align:center}
-        .stn{font-size:clamp(42px,6vw,64px);font-weight:900;font-family:'JetBrains Mono',monospace;letter-spacing:-2px;background:linear-gradient(135deg,var(--blue),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .stn{font-size:clamp(42px,6vw,64px);font-weight:900;font-family:'JetBrains Mono',monospace;letter-spacing:-2px;background:linear-gradient(135deg,var(--blue),var(--cyan));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:var(--blue)}
         .stl{font-size:12px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:3px;font-weight:600;margin-top:6px}
         .tsec{padding:100px 24px;background:var(--dark);text-align:center;position:relative;z-index:10}
         .tsec h2{font-size:clamp(28px,4vw,44px);font-weight:800;letter-spacing:-1px;margin-bottom:48px}
@@ -427,7 +438,7 @@ export default function HealixLanding() {
         <div className="cfade" style={{ opacity: 1 - canvasOp }} />
 
         <nav className={`nav ${sp > 0.05 && sp < 0.5 ? "dk" : ""} ${sp >= 0.5 ? "lt" : ""}`}>
-          <div className="nlogo">
+          <div className="nlogo" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
             <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
               <path d="M14 2L2 8v12l12 6 12-6V8L14 2z" fill="url(#g1)"/>
               <path d="M14 8v12M8 11v6M20 11v6" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
@@ -436,11 +447,11 @@ export default function HealixLanding() {
             Healix
           </div>
           <div className="nlinks">
-            <a href="#features">Features</a>
-            <a href="#tech">Stack</a>
-            <a href="#about">About</a>
+            <a href="#features" onClick={(e) => scrollToSection(e, "features")}>Features</a>
+            <a href="#tech" onClick={(e) => scrollToSection(e, "tech")}>Stack</a>
+            <a href="#about" onClick={(e) => scrollToSection(e, "about")}>About</a>
           </div>
-          <button className="ncta">Get Started</button>
+          <button className="ncta" onClick={() => navigate("/labs")}>Get Started</button>
         </nav>
 
         <ScrollDots progress={sp} />
@@ -464,8 +475,7 @@ export default function HealixLanding() {
           </h1>
           <p className="gssub">Three AI tools. One platform. Transform lab reports, consultations, and body scans into insights anyone can understand.</p>
           <div className="gsbtn">
-            <button className="btn1">Try Healix Now</button>
-            <button className="btn2">Watch Demo ↗</button>
+            <button className="btn1" onClick={() => navigate("/labs")}>Try Healix Now</button>
           </div>
         </div>
 
@@ -489,6 +499,7 @@ export default function HealixLanding() {
                 desc="Drop any lab report PDF in EN, FR, AR, or VN. Vision model extracts every test, classifies severity across 5 tiers, and generates plain-language explanations with next steps."
                 gradient="linear-gradient(135deg,#38B6FF,#0077CC)"
                 accentColor="#38B6FF" delay={0} visible={sections.features}
+                onClick={() => navigate("/labs")}
               />
               <FeatureCard
                 icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><path d="M12 2a3 3 0 00-3 3v6a3 3 0 006 0V5a3 3 0 00-3-3z"/><path d="M19 10v1a7 7 0 01-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/><path d="M8 22h8"/></svg>}
@@ -497,14 +508,16 @@ export default function HealixLanding() {
                 desc="Upload a consultation recording. AI transcribes across 4 languages, identifies symptoms and medications, then generates a structured SOAP note — saving doctors 10-15 hours weekly."
                 gradient="linear-gradient(135deg,#00D4AA,#00996B)"
                 accentColor="#00D4AA" delay={0.15} visible={sections.features}
+                onClick={() => navigate("/scribe")}
               />
               <FeatureCard
                 icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a8.5 8.5 0 0113 0"/><path d="M12 11v4M10 13h4"/></svg>}
                 title="Body Scan"
                 subtitle="Computer Vision · Robotics"
-                desc="Robot-arm camera captures calibrated body photos. AI estimates 8 body measurements and calculates body fat percentage using U.S. Navy Method with BMI cross-validation."
+                desc="Capture front and side body photos — guided by voice assistant. AI estimates 22 body measurements and calculates body fat using the U.S. Navy Method with BMI cross-validation."
                 gradient="linear-gradient(135deg,#8B5CF6,#6D28D9)"
                 accentColor="#8B5CF6" delay={0.3} visible={sections.features}
+                onClick={() => navigate("/bodyscan")}
               />
             </div>
           </section>
@@ -530,7 +543,7 @@ export default function HealixLanding() {
         <section className="tsec" id="tech" ref={(el) => obs("tech", el)}>
           <h2>Built With <span className="gsgrad">Cutting-Edge AI</span></h2>
           <div className="tgrid">
-            {["Qwen-VL", "Qwen-Audio", "Qwen-Max", "Alibaba Cloud", "FastAPI", "React 19", "PyMuPDF", "Docker", "Robot Arm"].map((t, i) => (
+            {["Qwen-VL", "Qwen-Max", "Dashscope API", "Alibaba Cloud", "Google Speech", "FastAPI", "React 19", "Vite", "PyMuPDF"].map((t, i) => (
               <div key={t} className="tchip" style={{
                 opacity: sections.tech ? 1 : 0,
                 transform: sections.tech ? "translateY(0)" : "translateY(20px)",
