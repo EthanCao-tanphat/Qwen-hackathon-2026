@@ -9,7 +9,7 @@
  *   Camera opens → voice guides distance, pose, angle, lighting, clothing
  *   → auto-captures when ready → switches to side photo → auto-captures → done
  */
-
+import { BASE } from '../../lib/api'
 import { useState, useRef, useEffect, useCallback } from 'react'
 
 // ─── Voice Guidance Config ──────────────────────────────────────────────────
@@ -172,6 +172,7 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
   const readyCountRef = useRef(0)
   const bestFrameRef = useRef(null)
   const bestScoreRef = useRef(0)
+  const evalStartTimeRef = useRef(0)
 
   const lang = language === 'vi' ? 'vi' : 'en'
   const msgs = VOICE_MESSAGES[lang]
@@ -311,6 +312,7 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
   // ─── Evaluation Loop ─────────────────────────────────────────────
   const startEvalLoop = () => {
     if (evalIntervalRef.current) clearInterval(evalIntervalRef.current)
+    evalStartTimeRef.current = Date.now()
 
     evalIntervalRef.current = setInterval(async () => {
       if (capturing) return
@@ -323,7 +325,7 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
         formData.append('image', blob, 'frame.jpg')
         formData.append('photo_type', phase)
 
-        const resp = await fetch('/api/bodyscan/evaluate-photo', {
+        const resp = await fetch(`${BASE}/bodyscan/evaluate-photo`, {
           method: 'POST',
           body: formData,
         })
@@ -340,9 +342,13 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
           bestFrameRef.current = blob
         }
 
-        // More lenient threshold — ready if overall score >= 0.55
-        // (instead of waiting for all 8 criteria to pass)
-        const isReady = result.ready || score >= 0.55
+       // Phase-aware threshold: side pose is harder for Qwen-VL to score,
+        // so we start with a lower bar AND relax it further as time passes.
+        const elapsed = (Date.now() - evalStartTimeRef.current) / 1000
+        const baseThreshold = phase === 'side' ? 0.42 : 0.55
+        const timeRelaxation = Math.min(elapsed / 60, 0.15) // up to 0.15 off after 60s
+        const threshold = Math.max(baseThreshold - timeRelaxation, 0.30)
+        const isReady = result.ready || score >= threshold
 
         // Update border color
         if (isReady) {
@@ -383,8 +389,10 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
             }
           }
 
-          // More lenient — only speak fix if score < 0.5 (was 0.7)
-          if (worstKey && worstScore < 0.5) {
+          // Only speak fix if a criterion is genuinely bad. Side pose is 
+          // inherently lower-scoring so be quieter about it.
+          const nagThreshold = phase === 'side' ? 0.35 : 0.5
+          if (worstKey && worstScore < nagThreshold) {
             // Map criterion key to voice key
             let voiceKey = worstKey
             if (worstKey === 'pose') {
@@ -741,15 +749,27 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
           }}
         />
 
-        {/* Body Outline Guide (subtle) */}
+        {/* Body Outline Guide (subtle) — swaps between front and side */}
         <div style={styles.bodyOutline}>
           <svg viewBox="0 0 200 400" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" style={{ width: '100%', height: '100%' }}>
-            {/* Head */}
-            <ellipse cx="100" cy="45" rx="22" ry="28" />
-            {/* Body */}
-            <path d="M78 73 L65 170 L75 170 L70 320 L85 390 L90 390 L100 200 L110 390 L115 390 L130 320 L125 170 L135 170 L122 73 Z" />
+            {phase === 'front' ? (
+              <>
+                {/* Front: head + symmetric body */}
+                <ellipse cx="100" cy="45" rx="22" ry="28" />
+                <path d="M78 73 L65 170 L75 170 L70 320 L85 390 L90 390 L100 200 L110 390 L115 390 L130 320 L125 170 L135 170 L122 73 Z" />
+              </>
+            ) : (
+              <>
+                {/* Side: head profile + asymmetric body showing chest/back curves */}
+                <path d="M95 20 Q118 20 120 45 Q120 60 115 68 Q114 72 110 73 L110 73 L118 73" strokeLinejoin="round" />
+                <path d="M118 73 Q128 90 122 130 Q118 160 120 200 Q122 240 115 290 L120 390 L108 390 L98 290 Q92 240 95 200 Q96 160 92 130 Q88 100 92 73 Z" strokeLinejoin="round" />
+                {/* Arm hanging at side */}
+                <path d="M108 90 Q105 140 108 200" strokeLinejoin="round" />
+              </>
+            )}
           </svg>
         </div>
+
 
         {/* Phase Indicator */}
         <div style={styles.phaseTag}>
@@ -758,6 +778,27 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
             : (lang === 'vi' ? '📷 Ảnh bên' : '📷 Side photo')
           }
         </div>
+
+        {/* Desktop side-photo warning */}
+        {phase === 'side' && !isMobile && (
+          <div style={{
+            position: 'absolute',
+            top: 50,
+            left: 12,
+            right: 12,
+            background: 'rgba(234,179,8,0.9)',
+            color: '#000',
+            padding: '8px 12px',
+            borderRadius: 8,
+            fontSize: 12,
+            fontWeight: 600,
+            textAlign: 'center',
+          }}>
+            {lang === 'vi'
+              ? '⚠️ Ảnh bên khó chụp trên máy tính. Dùng điện thoại hoặc bỏ qua.'
+              : '⚠️ Side photos are hard on desktop. Use mobile or skip.'}
+          </div>
+        )}
 
         {/* Status Banner */}
         {statusText && (
@@ -821,7 +862,7 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
         </button>
       </div>
 
-      {/* Timer + hint */}
+     {/* Timer + hint */}
       <div style={styles.hintBar}>
         {elapsedSeconds > 8 && !evaluation?.ready && (
           <span style={styles.hintText}>
@@ -835,6 +876,18 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
             {lang === 'vi'
               ? `Dùng ảnh tốt nhất (${Math.round(bestScoreRef.current * 100)}%)`
               : `Use best frame (${Math.round(bestScoreRef.current * 100)}%)`}
+          </button>
+        )}
+        {/* Skip side photo — side is optional, front-only still works */}
+        {phase === 'side' && elapsedSeconds > 5 && (
+          <button
+            style={{ ...styles.useBestBtn, marginLeft: 8, color: '#eab308', borderColor: 'rgba(234,179,8,0.3)' }}
+            onClick={() => {
+              stopEverything()
+              setPhase('done')
+            }}
+          >
+            {lang === 'vi' ? '⏭ Bỏ qua ảnh bên' : '⏭ Skip side photo'}
           </button>
         )}
       </div>
