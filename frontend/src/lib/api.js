@@ -1,9 +1,10 @@
 /**
  * Healix API client
- * All endpoints proxy through Vite → FastAPI at localhost:8000
+ * All endpoints call the FastAPI backend defined by VITE_API_BASE_URL
  */
 
-const BASE = '/api'
+const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
+export const BASE = `${API_BASE}/api`
 
 export async function analyzeLabs(files, language = 'auto') {
   const form = new FormData()
@@ -51,6 +52,6 @@ export async function evaluatePhoto(imageBlob, photoType = 'front') {
 }
 
 export async function healthCheck() {
-  const res = await fetch('/health')
+  const res = await fetch(`${API_BASE}/health`)
   return res.json()
 }
