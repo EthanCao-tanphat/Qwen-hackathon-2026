@@ -234,7 +234,17 @@ export default function BodyScan() {
                   <div style={{ fontSize: 36, fontWeight: 900, fontFamily: 'var(--mono)', letterSpacing: -1 }}>
                     {results.body_composition.body_fat_pct}%
                   </div>
+                          {results.body_composition.body_fat_range && (
+                    <div style={{ fontSize: 11, color: 'var(--text-soft)', fontFamily: 'var(--mono)', marginTop: 2 }}>
+                      {results.body_composition.body_fat_range[0]}–{results.body_composition.body_fat_range[1]}%
+                    </div>
+                  )}
                   <div style={{ fontSize: 13, color: 'var(--text-soft)' }}>Body Fat</div>
+                  {results.body_composition.body_fat_confidence !== undefined && (
+            <div style={{ fontSize: 10, color: 'var(--text-soft)', opacity: 0.7, marginTop: 2 }}>
+              ±{results.body_composition.body_fat_confidence > 0.65 ? '3.5' : '5'}% · {Math.round(results.body_composition.body_fat_confidence * 100)}% confidence
+            </div>
+          )}
                 </div>
                 <div>
                   <div style={{ fontSize: 36, fontWeight: 900, fontFamily: 'var(--mono)', letterSpacing: -1 }}>
