@@ -15,6 +15,10 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 // ─── Voice Guidance Config ──────────────────────────────────────────────────
 const VOICE_MESSAGES = {
   en: {
+    countdown_3: "Hold still. Three.",
+    countdown_2: "Two.",
+    countdown_1: "One.",
+    capture_now: "Captured.",
     starting: "Point your camera towards yourself. I'll guide you.",
     starting_desktop: "Stand in front of your webcam, about 2 meters back. I'll guide you.",
     full_body_visible: "I can't see your full body. Step back a little.",
@@ -36,6 +40,10 @@ const VOICE_MESSAGES = {
     camera_error: "Could not access the camera. Please check permissions or use upload mode.",
   },
   vi: {
+    countdown_3: "Giữ yên. Ba.",
+    countdown_2: "Hai.",
+    countdown_1: "Một.",
+    capture_now: "Đã chụp.",   
     starting: "Hướng camera về phía bạn. Tôi sẽ hướng dẫn bạn.",
     starting_desktop: "Đứng trước webcam, cách khoảng 2 mét. Tôi sẽ hướng dẫn bạn.",
     full_body_visible: "Tôi chưa thấy toàn thân bạn. Lùi lại một chút.",
@@ -142,7 +150,6 @@ class VoiceGuide {
   }
 }
 
-
 // ─── Main Component ─────────────────────────────────────────────────────────
 export default function GuidedCapture({ language = 'en', onCapture, onCancel }) {
   // onCapture(frontFile, sideFile) — called with captured photos
@@ -152,6 +159,8 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
   const [phase, setPhase] = useState('front') // 'front', 'side', 'done'
   const phaseRef = useRef(phase)
   useEffect(() => { phaseRef.current = phase }, [phase])
+  const [countdown, setCountdown] = useState(0)
+  const countingRef = useRef(false)
   const [cameraReady, setCameraReady] = useState(false)
   const [cameraError, setCameraError] = useState(null)
   const [evaluation, setEvaluation] = useState(null)
@@ -362,17 +371,12 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
 
         // Voice guidance — pick the worst criterion
         if (isReady) {
-          readyCountRef.current += 1
-          setReadyCount(readyCountRef.current)
+        // First green frame — start countdown. Ignore any evaluation after this.
+        if (!countingRef.current) {
+        countingRef.current = true
+        startCaptureCountdown()
+        }
 
-          // Auto-capture after just 1 consecutive ready check (was 2)
-          if (readyCountRef.current >= 1) {
-            // AUTO CAPTURE
-            await doCapture()
-          } else {
-            voiceRef.current.speak('hold_still', true)
-            setStatusText(msgs.hold_still)
-          }
         } else {
           readyCountRef.current = 0
           setReadyCount(0)
@@ -432,54 +436,134 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
       }
     }, 2500) // Every 2.5 seconds
   }
-
-  // ─── Auto Capture ─────────────────────────────────────────────────
-  const doCapture = async () => {
-    setCapturing(true)
-    if (evalIntervalRef.current) clearInterval(evalIntervalRef.current)
-
-    // Haptic feedback
-    if (navigator.vibrate) navigator.vibrate(200)
-
-    const blob = await grabFrame()
-    const file = new File([blob], `${phase}_photo.jpg`, { type: 'image/jpeg' })
-
-    if (phase === 'front') {
-      setFrontPhoto(file)
-      voiceRef.current.speak('captured_front', true)
-      setStatusText(msgs.captured_front)
-      setBorderColor('#3b82f6') // blue transition
-
-      // Wait for voice to finish, then start side photo
-    setTimeout(() => {
-        setPhase('side')
-        setCapturing(false)
-        setEvaluation(null)
-        readyCountRef.current = 0
-        bestScoreRef.current = 0
-        bestFrameRef.current = null
-        setReadyCount(0)
-        startEvalLoop()   // ← ADD THIS — restart evaluation for side phase
-        setElapsedSeconds(0)
-        setBorderColor('transparent')
-        setStatusText('')
-        startEvalLoop()
-      }, 4000)
-
-    } else {
-      setSidePhoto(file)
-      voiceRef.current.speak('captured_side', true)
-      setStatusText(msgs.captured_side)
-      setBorderColor('#22c55e')
-
-      // Done — stop camera, send photos back
-      setTimeout(() => {
-        stopEverything()
-        setPhase('done')
-      }, 2500)
-    }
+  // ─── Capture Countdown (triggered by first green frame) ───────────
+const startCaptureCountdown = () => {
+  // Stop evaluating — we're committed to capture now
+  if (evalIntervalRef.current) {
+    clearInterval(evalIntervalRef.current)
+    evalIntervalRef.current = null
   }
 
+  let count = 3
+  setCountdown(3)
+  voiceRef.current.speak('countdown_3', true)
+  setStatusText('3')
+
+  const tick = setInterval(() => {
+    count -= 1
+    if (count === 2) {
+      setCountdown(2)
+      voiceRef.current.speak('countdown_2', true)
+      setStatusText('2')
+    } else if (count === 1) {
+      setCountdown(1)
+      voiceRef.current.speak('countdown_1', true)
+      setStatusText('1')
+    } else {
+      clearInterval(tick)
+      setCountdown(0)
+      voiceRef.current.speak('capture_now', true)
+      doCapture()
+    }
+  }, 1000)
+}
+  // ─── Auto Capture ─────────────────────────────────────────────────
+const doCapture = async () => {
+  setCapturing(true)
+  if (evalIntervalRef.current) clearInterval(evalIntervalRef.current)
+
+  // Haptic feedback
+  if (navigator.vibrate) navigator.vibrate(200)
+
+  const blob = await grabFrame()
+  if (!blob) {
+    setCapturing(false)
+    countingRef.current = false
+    return
+  }
+
+  // ── Final validation: did the captured frame actually work? ──
+  try {
+    const validateForm = new FormData()
+    validateForm.append('image', blob, 'final.jpg')
+    validateForm.append('photo_type', phaseRef.current)
+
+    const validateResp = await fetch(`${BASE}/bodyscan/evaluate-photo`, {
+      method: 'POST',
+      body: validateForm,
+    })
+    const validation = await validateResp.json()
+
+    // If photo is clearly bad, tell the user exactly why and let them retry
+    if (!validation.ready && (validation.overall_score || 0) < 0.35) {
+      const criteria = validation.criteria || {}
+      let worstFix = validation.suggestion || (lang === 'vi'
+        ? 'Ảnh chụp chưa được. Hãy thử lại.'
+        : "Photo didn't capture well. Please try again.")
+      let worstScore = 1
+      for (const [key, crit] of Object.entries(criteria)) {
+        if (crit && typeof crit.score === 'number' && crit.score < worstScore && crit.fix) {
+          worstScore = crit.score
+          worstFix = crit.fix
+        }
+      }
+
+      setStatusText(worstFix)
+      voiceRef.current.speakCustom(worstFix)
+      setBorderColor('#ef4444')
+      setCapturing(false)
+      countingRef.current = false
+      readyCountRef.current = 0
+      setCountdown(0)
+
+      // Wait 3 seconds for user to read, then resume scanning
+      setTimeout(() => {
+        setStatusText('')
+        setBorderColor('transparent')
+        startEvalLoop()
+      }, 3500)
+      return
+    }
+  } catch (err) {
+    console.warn('Final validation failed, proceeding anyway:', err)
+  }
+
+  // ── Photo passed validation — proceed ──
+  const file = new File([blob], `${phaseRef.current}_photo.jpg`, { type: 'image/jpeg' })
+
+  if (phaseRef.current === 'front') {
+    setFrontPhoto(file)
+    voiceRef.current.speak('captured_front', true)
+    setStatusText(msgs.captured_front)
+    setBorderColor('#3b82f6') // blue transition
+
+    setTimeout(() => {
+      setPhase('side')
+      setCapturing(false)
+      setEvaluation(null)
+      readyCountRef.current = 0
+      bestScoreRef.current = 0
+      bestFrameRef.current = null
+      setReadyCount(0)
+      setElapsedSeconds(0)
+      setBorderColor('transparent')
+      setStatusText('')
+      countingRef.current = false
+      startEvalLoop()
+    }, 4000)
+
+  } else {
+    setSidePhoto(file)
+    voiceRef.current.speak('captured_side', true)
+    setStatusText(msgs.captured_side)
+    setBorderColor('#22c55e')
+
+    setTimeout(() => {
+      stopEverything()
+      setPhase('done')
+    }, 2500)
+  }
+}
   // ─── Manual Capture (bail-out) ─────────────────────────────────────
   const manualCapture = async () => {
     readyCountRef.current = 2
@@ -771,8 +855,25 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
             )}
           </svg>
         </div>
-
-
+        {/* Big countdown number */}
+          {countdown > 0 && (
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              fontSize: 180,
+              fontWeight: 900,
+              color: '#22c55e',
+              fontFamily: 'monospace',
+              lineHeight: 1,
+              textShadow: '0 0 40px rgba(34,197,94,0.6), 0 4px 20px rgba(0,0,0,0.8)',
+              pointerEvents: 'none',
+              zIndex: 10,
+            }}>
+              {countdown}
+            </div>
+          )}
         {/* Phase Indicator */}
         <div style={styles.phaseTag}>
           {phase === 'front'
