@@ -150,6 +150,8 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
 
   const [mode, setMode] = useState(null) // null = selector, 'tripod', 'upload'
   const [phase, setPhase] = useState('front') // 'front', 'side', 'done'
+  const phaseRef = useRef(phase)
+  useEffect(() => { phaseRef.current = phase }, [phase])
   const [cameraReady, setCameraReady] = useState(false)
   const [cameraError, setCameraError] = useState(null)
   const [evaluation, setEvaluation] = useState(null)
@@ -323,8 +325,7 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
       try {
         const formData = new FormData()
         formData.append('image', blob, 'frame.jpg')
-        formData.append('photo_type', phase)
-
+        formData.append('photo_type', phaseRef.current)
         const resp = await fetch(`${BASE}/bodyscan/evaluate-photo`, {
           method: 'POST',
           body: formData,
@@ -345,7 +346,7 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
        // Phase-aware threshold: side pose is harder for Qwen-VL to score,
         // so we start with a lower bar AND relax it further as time passes.
         const elapsed = (Date.now() - evalStartTimeRef.current) / 1000
-        const baseThreshold = phase === 'side' ? 0.42 : 0.55
+        const baseThreshold = phaseRef.current === 'side' ? 0.42 : 0.55 
         const timeRelaxation = Math.min(elapsed / 60, 0.15) // up to 0.15 off after 60s
         const threshold = Math.max(baseThreshold - timeRelaxation, 0.30)
         const isReady = result.ready || score >= threshold
@@ -391,12 +392,12 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
 
           // Only speak fix if a criterion is genuinely bad. Side pose is 
           // inherently lower-scoring so be quieter about it.
-          const nagThreshold = phase === 'side' ? 0.35 : 0.5
+          const nagThreshold = phaseRef.current === 'side' ? 0.35 : 0.5 
           if (worstKey && worstScore < nagThreshold) {
             // Map criterion key to voice key
             let voiceKey = worstKey
             if (worstKey === 'pose') {
-              voiceKey = phase === 'front' ? 'pose_front' : 'pose_side'
+              voiceKey = phaseRef.current === 'front' ? 'pose_front' : 'pose_side'
             }
 
             // Use the fix text from API if available, otherwise use our preset
@@ -450,7 +451,7 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
       setBorderColor('#3b82f6') // blue transition
 
       // Wait for voice to finish, then start side photo
-      setTimeout(() => {
+    setTimeout(() => {
         setPhase('side')
         setCapturing(false)
         setEvaluation(null)
@@ -458,6 +459,7 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
         bestScoreRef.current = 0
         bestFrameRef.current = null
         setReadyCount(0)
+        startEvalLoop()   // ← ADD THIS — restart evaluation for side phase
         setElapsedSeconds(0)
         setBorderColor('transparent')
         setStatusText('')
