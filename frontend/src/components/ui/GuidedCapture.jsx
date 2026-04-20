@@ -355,7 +355,7 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
        // Phase-aware threshold: side pose is harder for Qwen-VL to score,
         // so we start with a lower bar AND relax it further as time passes.
         const elapsed = (Date.now() - evalStartTimeRef.current) / 1000
-        const baseThreshold = phaseRef.current === 'side' ? 0.42 : 0.55 
+        const baseThreshold = phaseRef.current === 'side' ? 0.30 : 0.50
         const timeRelaxation = Math.min(elapsed / 60, 0.15) // up to 0.15 off after 60s
         const threshold = Math.max(baseThreshold - timeRelaxation, 0.30)
         const isReady = result.ready || score >= threshold
@@ -396,7 +396,7 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
 
           // Only speak fix if a criterion is genuinely bad. Side pose is 
           // inherently lower-scoring so be quieter about it.
-          const nagThreshold = phaseRef.current === 'side' ? 0.35 : 0.5 
+          const nagThreshold = phaseRef.current === 'side' ? 0.25 : 0.45
           if (worstKey && worstScore < nagThreshold) {
             // Map criterion key to voice key
             let voiceKey = worstKey
@@ -436,26 +436,21 @@ export default function GuidedCapture({ language = 'en', onCapture, onCancel }) 
       }
     }, 2500) // Every 2.5 seconds
   }
-  // ─── Capture Countdown (triggered by first green frame) ───────────
+// ─── Capture Countdown (triggered by first green frame) ───────────
 const startCaptureCountdown = () => {
-  // Stop evaluating — we're committed to capture now
   if (evalIntervalRef.current) {
     clearInterval(evalIntervalRef.current)
     evalIntervalRef.current = null
   }
 
-  let count = 3
-  setCountdown(3)
-  voiceRef.current.speak('countdown_3', true)
-  setStatusText('3')
+  let count = 2
+  setCountdown(2)
+  voiceRef.current.speak('countdown_2', true)
+  setStatusText('2')
 
   const tick = setInterval(() => {
     count -= 1
-    if (count === 2) {
-      setCountdown(2)
-      voiceRef.current.speak('countdown_2', true)
-      setStatusText('2')
-    } else if (count === 1) {
+    if (count === 1) {
       setCountdown(1)
       voiceRef.current.speak('countdown_1', true)
       setStatusText('1')
@@ -467,7 +462,7 @@ const startCaptureCountdown = () => {
     }
   }, 1000)
 }
-  // ─── Auto Capture ─────────────────────────────────────────────────
+ // ─── Auto Capture ─────────────────────────────────────────────────
 const doCapture = async () => {
   setCapturing(true)
   if (evalIntervalRef.current) clearInterval(evalIntervalRef.current)
@@ -482,60 +477,13 @@ const doCapture = async () => {
     return
   }
 
-  // ── Final validation: did the captured frame actually work? ──
-  try {
-    const validateForm = new FormData()
-    validateForm.append('image', blob, 'final.jpg')
-    validateForm.append('photo_type', phaseRef.current)
-
-    const validateResp = await fetch(`${BASE}/bodyscan/evaluate-photo`, {
-      method: 'POST',
-      body: validateForm,
-    })
-    const validation = await validateResp.json()
-
-    // If photo is clearly bad, tell the user exactly why and let them retry
-    if (!validation.ready && (validation.overall_score || 0) < 0.35) {
-      const criteria = validation.criteria || {}
-      let worstFix = validation.suggestion || (lang === 'vi'
-        ? 'Ảnh chụp chưa được. Hãy thử lại.'
-        : "Photo didn't capture well. Please try again.")
-      let worstScore = 1
-      for (const [key, crit] of Object.entries(criteria)) {
-        if (crit && typeof crit.score === 'number' && crit.score < worstScore && crit.fix) {
-          worstScore = crit.score
-          worstFix = crit.fix
-        }
-      }
-
-      setStatusText(worstFix)
-      voiceRef.current.speakCustom(worstFix)
-      setBorderColor('#ef4444')
-      setCapturing(false)
-      countingRef.current = false
-      readyCountRef.current = 0
-      setCountdown(0)
-
-      // Wait 3 seconds for user to read, then resume scanning
-      setTimeout(() => {
-        setStatusText('')
-        setBorderColor('transparent')
-        startEvalLoop()
-      }, 3500)
-      return
-    }
-  } catch (err) {
-    console.warn('Final validation failed, proceeding anyway:', err)
-  }
-
-  // ── Photo passed validation — proceed ──
   const file = new File([blob], `${phaseRef.current}_photo.jpg`, { type: 'image/jpeg' })
 
   if (phaseRef.current === 'front') {
     setFrontPhoto(file)
     voiceRef.current.speak('captured_front', true)
     setStatusText(msgs.captured_front)
-    setBorderColor('#3b82f6') // blue transition
+    setBorderColor('#3b82f6')
 
     setTimeout(() => {
       setPhase('side')
@@ -550,7 +498,7 @@ const doCapture = async () => {
       setStatusText('')
       countingRef.current = false
       startEvalLoop()
-    }, 4000)
+    }, 2000)
 
   } else {
     setSidePhoto(file)
@@ -561,7 +509,7 @@ const doCapture = async () => {
     setTimeout(() => {
       stopEverything()
       setPhase('done')
-    }, 2500)
+    }, 1500)
   }
 }
   // ─── Manual Capture (bail-out) ─────────────────────────────────────
